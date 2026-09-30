@@ -1,0 +1,15 @@
+{
+  "name": "language-translator",
+  "version": "1.0.0",
+  "description": "SAPUI5 Language Translator – 100% frontend application using Google Cloud Translation API v2",
+  "private": true,
+  "scripts": {
+    "start": "ui5 serve -o index.html",
+    "build": "ui5 build --clean-dest",
+    "lint": "eslint webapp"
+  },
+  "devDependencies": {
+    "@ui5/cli": "^3.0.0",
+    "@sap/ux-ui5-tooling": "^1.14.0"
+  }
+}

@@ -1,0 +1,162 @@
+<mvc:View
+    xmlns="sap.m"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:core="sap.ui.core"
+    xmlns:l="sap.ui.layout"
+    controllerName="datanub.translator.controller.App"
+    displayBlock="true">
+
+    <App id="app">
+        <pages>
+            <Page
+                id="translatorPage"
+                title="{i18n>pageTitle}"
+                titleLevel="H1"
+                showNavButton="false"
+                class="sapUiResponsiveContentPadding">
+
+                <!-- ======================================================= -->
+                <!-- Main content: responsive grid layout                     -->
+                <!-- ======================================================= -->
+                <l:Grid
+                    id="mainGrid"
+                    defaultSpan="XL6 L6 M12 S12"
+                    hSpacing="2"
+                    class="sapUiLargeMarginTop">
+
+                    <!-- ─────────────  INPUT PANEL  ───────────── -->
+                    <Panel
+                        id="inputPanel"
+                        headerText="{i18n>panelInput}"
+                        expandable="false"
+                        expanded="true"
+                        width="100%"
+                        class="sapUiSmallMarginBottom">
+
+                        <VBox class="sapUiSmallMargin">
+
+                            <!-- Text input -->
+                            <Label
+                                id="labelInput"
+                                text="{i18n>labelInputText}"
+                                labelFor="inputTextArea"
+                                required="true" />
+
+                            <TextArea
+                                id="inputTextArea"
+                                value="{/inputText}"
+                                placeholder="{i18n>placeholderInput}"
+                                rows="8"
+                                width="100%"
+                                growing="true"
+                                growingMaxLines="16"
+                                class="sapUiSmallMarginBottom" />
+
+                            <!-- Target language -->
+                            <Label
+                                id="labelLanguage"
+                                text="{i18n>labelTargetLanguage}"
+                                labelFor="languageSelect"
+                                required="true" />
+
+                            <ComboBox
+                                id="languageSelect"
+                                selectedKey="{/targetLanguage}"
+                                width="100%"
+                                busy="{/languagesBusy}"
+                                showSecondaryValues="true"
+                                filterSecondaryValues="true"
+                                class="sapUiSmallMarginBottom"
+                                items="{
+                                    path: '/languages',
+                                    sorter: { path: 'name', descending: false }
+                                }">
+                                <core:ListItem
+                                    key="{code}"
+                                    text="{name}"
+                                    additionalText="{code}" />
+                            </ComboBox>
+
+                            <!-- Action buttons -->
+                            <HBox
+                                id="buttonBar"
+                                class="sapUiSmallMarginTop"
+                                alignItems="Center">
+
+                                <Button
+                                    id="btnTranslate"
+                                    text="{i18n>btnTranslate}"
+                                    type="Emphasized"
+                                    icon="sap-icon://translate"
+                                    press=".onTranslate"
+                                    busy="{/busy}"
+                                    enabled="{= !${/busy} }"
+                                    class="sapUiSmallMarginEnd" />
+
+                                <Button
+                                    id="btnClear"
+                                    text="{i18n>btnClear}"
+                                    type="Default"
+                                    icon="sap-icon://eraser"
+                                    press=".onClear" />
+                            </HBox>
+                        </VBox>
+                    </Panel>
+
+                    <!-- ─────────────  OUTPUT PANEL  ───────────── -->
+                    <Panel
+                        id="outputPanel"
+                        headerText="{i18n>panelOutput}"
+                        expandable="false"
+                        expanded="true"
+                        width="100%"
+                        visible="{= ${/translatedText} !== '' }">
+
+                        <VBox class="sapUiSmallMargin">
+
+                            <!-- Detected source language -->
+                            <HBox
+                                id="detectedLangBox"
+                                alignItems="Center"
+                                visible="{= ${/detectedSourceLanguage} !== '' }"
+                                class="sapUiTinyMarginBottom">
+
+                                <Label
+                                    id="labelDetected"
+                                    text="{i18n>labelDetectedSource}:"
+                                    class="sapUiTinyMarginEnd" />
+
+                                <Text
+                                    id="detectedLangText"
+                                    text="{/detectedSourceLanguage}" />
+                            </HBox>
+
+                            <!-- Translated text -->
+                            <Label
+                                id="labelOutput"
+                                text="{i18n>labelTranslatedText}" />
+
+                            <TextArea
+                                id="outputTextArea"
+                                value="{/translatedText}"
+                                editable="false"
+                                rows="8"
+                                width="100%"
+                                growing="true"
+                                growingMaxLines="16" />
+                        </VBox>
+                    </Panel>
+                </l:Grid>
+
+                <!-- Busy indicator overlay during translation -->
+                <dependents>
+                    <BusyDialog
+                        id="busyDialog"
+                        title="Translating…"
+                        text="Please wait while we translate your text."
+                        showCancelButton="false" />
+                </dependents>
+            </Page>
+        </pages>
+    </App>
+</mvc:View>
