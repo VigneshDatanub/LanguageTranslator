@@ -1,0 +1,26 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:l="sap.ui.layout">
+    <Dialog
+        id="editDialog"
+        title="Edit Translation"
+        contentWidth="400px">
+        <content>
+            <l:VerticalLayout class="sapUiContentPadding" width="100%">
+                <Label text="Source Language" required="true" />
+                <Input value="{odata>SrcLang}" maxLength="40" />
+                <Label text="Target Language" required="true" class="sapUiSmallMarginTop" />
+                <Input value="{odata>TarLang}" maxLength="40" />
+                <Label text="Source Text" required="true" class="sapUiSmallMarginTop" />
+                <TextArea value="{odata>SrcText}" width="100%" rows="3" />
+                <Label text="Target Text" required="true" class="sapUiSmallMarginTop" />
+                <TextArea value="{odata>TarText}" width="100%" rows="3" />
+            </l:VerticalLayout>
+        </content>
+        <buttons>
+            <Button text="{i18n>btnSave}" press=".onSaveEdit" type="Emphasized" />
+            <Button text="{i18n>btnCancel}" press=".onCancelEdit" />
+        </buttons>
+    </Dialog>
+</core:FragmentDefinition>

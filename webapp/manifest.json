@@ -8,7 +8,16 @@
     "applicationVersion": {
       "version": "1.0.0"
     },
-    "i18n": "i18n/i18n.properties"
+    "i18n": "i18n/i18n.properties",
+    "dataSources": {
+      "translationService": {
+        "uri": "/sap/opu/odata/sap/ZGCP_TRANSLATION_SRV/",
+        "type": "OData",
+        "settings": {
+          "odataVersion": "2.0"
+        }
+      }
+    }
   },
   "sap.ui": {
     "technology": "UI5",
@@ -38,6 +47,15 @@
         "type": "sap.ui.model.resource.ResourceModel",
         "settings": {
           "bundleName": "datanub.translator.i18n.i18n"
+        }
+      },
+      "odata": {
+        "type": "sap.ui.model.odata.v2.ODataModel",
+        "dataSource": "translationService",
+        "preload": true,
+        "settings": {
+          "defaultBindingMode": "TwoWay",
+          "defaultCountMode": "None"
         }
       }
     },

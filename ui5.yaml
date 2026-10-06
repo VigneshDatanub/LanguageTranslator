@@ -10,4 +10,11 @@ framework:
     - name: sap.ui.core
     - name: sap.ui.layout
 server:
-  customMiddleware: []
+  customMiddleware:
+    - name: fiori-tools-proxy
+      afterMiddleware: compression
+      configuration:
+        ignoreCertError: true
+        backend:
+          - path: /sap
+            url: https://CLOUD9.WAY2ERP.US:44300

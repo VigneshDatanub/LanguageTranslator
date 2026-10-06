@@ -1,0 +1,33 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:l="sap.ui.layout">
+    <Dialog title="Filter Translations" contentWidth="400px" verticalScrolling="true">
+        <content>
+            <l:VerticalLayout class="sapUiContentPadding" width="100%">
+                <Label text="ID (GuiNo)" />
+                <Input id="dlgFilterGuiNo" placeholder="e.g. 005056a9-..." />
+
+                <Label text="Source Language Code" class="sapUiSmallMarginTop" />
+                <Input id="dlgFilterSrcLang" placeholder="e.g. EN" maxLength="40" />
+                
+                <Label text="Target Language Code" class="sapUiSmallMarginTop" />
+                <Input id="dlgFilterTarLang" placeholder="e.g. DE" maxLength="40" />
+                
+                <Label text="Created By" class="sapUiSmallMarginTop" />
+                <Input id="dlgFilterCreatedBy" placeholder="e.g. D10045" maxLength="12" />
+
+                <Label text="Creation Date (TransOn)" class="sapUiSmallMarginTop" />
+                <DatePicker id="dlgFilterTransOn" displayFormat="yyyy-MM-dd" placeholder="Select Date" />
+
+                <Label text="Creation Time (TransAt)" class="sapUiSmallMarginTop" />
+                <TimePicker id="dlgFilterTransAt" displayFormat="HH:mm:ss" placeholder="Select Time" />
+            </l:VerticalLayout>
+        </content>
+        <buttons>
+            <Button text="Apply Filter" type="Emphasized" press=".onApplyFilterDialog" />
+            <Button text="Clear Filter" press=".onClearFilterDialog" />
+            <Button text="Cancel" press=".onCancelFilterDialog" />
+        </buttons>
+    </Dialog>
+</core:FragmentDefinition>

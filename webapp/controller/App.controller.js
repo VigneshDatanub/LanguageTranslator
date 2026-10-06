@@ -1,8 +1,12 @@
 sap.ui.define([
     "sap/ui/core/mvc/Controller",
     "sap/m/MessageBox",
-    "sap/m/MessageToast"
-], function (Controller, MessageBox, MessageToast) {
+    "sap/m/MessageToast",
+    "sap/ui/model/Filter",
+    "sap/ui/model/FilterOperator",
+    "sap/ui/core/Fragment",
+    "datanub/translator/model/formatter"
+], function (Controller, MessageBox, MessageToast, Filter, FilterOperator, Fragment, formatter) {
     "use strict";
 
     // ================================================================
@@ -13,7 +17,7 @@ sap.ui.define([
     //   • API restrictions  → Cloud Translation API only
     //   • Application restrictions → HTTP referrers (your domain)
     // ================================================================
-    var API_KEY = "AIzaSyBOXv8Izh6iL0qp5nGNaDplVGr-ipoxIcY";
+    var API_KEY = "AIzaSyCqdbPEH1-0IFEhZGAKdY35ZTD3jKYf8s8";
 
     // Google Cloud Translation API v2 endpoints
     var BASE_URL = "https://translation.googleapis.com/language/translate/v2";
@@ -21,6 +25,7 @@ sap.ui.define([
     var TRANSLATE_URL = BASE_URL;
 
     return Controller.extend("datanub.translator.controller.App", {
+        formatter: formatter,
 
         /* ──────────────────────────────────────────────
          * Lifecycle
@@ -40,11 +45,20 @@ sap.ui.define([
             // Load any saved translation state from local storage
             this._loadState();
 
+            this._iCurrentPage = 0;
+            this._aCurrentFilters = [];
+            this._oModel.setProperty("/historyPage", 0);
+            this._oModel.setProperty("/historyPrevEnabled", false);
+            this._oModel.setProperty("/historyNextEnabled", false);
+
             // Hook into the browser's unload event to automatically save state upon refresh/close
             window.addEventListener("beforeunload", this._saveState.bind(this));
 
             // Load the supported language list from the API
             this.loadSupportedLanguages();
+            
+            // Load initial history table page
+            this._loadHistoryPage();
         },
 
         /* ──────────────────────────────────────────────
@@ -57,12 +71,33 @@ sap.ui.define([
          *
          * The "target=en" parameter tells Google to return the language
          * names localised in English so we get human-readable names.
+         *
+         * Languages are cached in localStorage for 24 hours to avoid
+         * burning API quota on every page load (important for trial accounts).
          */
         loadSupportedLanguages: async function () {
             // Guard: check API key
             if (!API_KEY || API_KEY === "YOUR_GOOGLE_CLOUD_API_KEY") {
                 MessageBox.error(this._oBundle.getText("msgApiKeyMissing"));
                 return;
+            }
+
+            // ── Try to load from cache first ──
+            var CACHE_KEY = "LanguageTranslatorLangsCache";
+            var CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in ms
+            try {
+                var sCached = localStorage.getItem(CACHE_KEY);
+                if (sCached) {
+                    var oCache = JSON.parse(sCached);
+                    if (oCache.timestamp && (Date.now() - oCache.timestamp < CACHE_TTL) &&
+                        Array.isArray(oCache.languages) && oCache.languages.length > 0) {
+                        this._oModel.setProperty("/languages", oCache.languages);
+                        MessageToast.show(this._oBundle.getText("msgLanguagesLoaded"));
+                        return;  // Cache hit — no API call needed
+                    }
+                }
+            } catch (e) {
+                // Cache corrupt — proceed to API call
             }
 
             this._oModel.setProperty("/languagesBusy", true);
@@ -107,6 +142,14 @@ sap.ui.define([
                 this._oModel.setProperty("/languages", aLanguages);
                 MessageToast.show(this._oBundle.getText("msgLanguagesLoaded"));
 
+                // ── Save to cache ──
+                try {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({
+                        timestamp: Date.now(),
+                        languages: aLanguages
+                    }));
+                } catch (e) { /* storage full — ignore */ }
+
             } catch (oError) {
                 // Network / CORS / unexpected
                 MessageBox.error(
@@ -128,8 +171,8 @@ sap.ui.define([
          * and updates the model with the result.
          */
         onTranslate: async function () {
-            var sInputText    = (this._oModel.getProperty("/inputText") || "").trim();
-            var sTargetLang   = this._oModel.getProperty("/targetLanguage");
+            var sInputText = (this._oModel.getProperty("/inputText") || "").trim();
+            var sTargetLang = this._oModel.getProperty("/targetLanguage");
 
             // ── Validation ──
             if (!sInputText) {
@@ -185,6 +228,9 @@ sap.ui.define([
                         "/detectedSourceLanguage",
                         oFound ? oFound.name : sDetected
                     );
+                    this._oModel.setProperty("/detectedSourceLanguageCode", sDetected.toUpperCase());
+                } else {
+                    this._oModel.setProperty("/detectedSourceLanguageCode", "EN");
                 }
 
                 MessageToast.show(this._oBundle.getText("msgTranslationSuccess"));
@@ -211,6 +257,221 @@ sap.ui.define([
             this._oModel.setProperty("/targetLanguage", "");
             this._oModel.setProperty("/translatedText", "");
             this._oModel.setProperty("/detectedSourceLanguage", "");
+            this._oModel.setProperty("/detectedSourceLanguageCode", "");
+            this._sEditGuiNo = null; // Exit edit mode
+        },
+
+        /* ──────────────────────────────────────────────
+         * OPERATION 3 — SAP OData Integration (History)
+         * ────────────────────────────────────────────── */
+
+        onSaveToSAP: function () {
+            var sSrcText = this._oModel.getProperty("/inputText");
+            var sTarText = this._oModel.getProperty("/translatedText");
+            var sTarLang = this._oModel.getProperty("/targetLanguage");
+            var sSrcLangCode = this._oModel.getProperty("/detectedSourceLanguageCode") || "EN";
+            var sTarLangCode = (sTarLang || "DE").toUpperCase();
+
+            if (!sSrcText || !sTarText) {
+                MessageBox.warning("Please translate a text before saving.");
+                return;
+            }
+
+            var oDataModel = this.getOwnerComponent().getModel("odata");
+            var oPayload = {
+                SrcLang: sSrcLangCode.substring(0, 40),
+                TarLang: sTarLangCode.substring(0, 40),
+                SrcText: sSrcText,
+                TarText: sTarText
+            };
+
+            if (this._sEditGuiNo) {
+                var sPath = "/TranlsatedTextsSet(guid'" + this._sEditGuiNo + "')";
+                oDataModel.update(sPath, oPayload, {
+                    success: function () {
+                        MessageToast.show(this._oBundle.getText("msgUpdateSuccess"));
+                        this._sEditGuiNo = null; // Exit edit mode
+                        this._loadHistoryPage();
+                    }.bind(this),
+                    error: function (oError) {
+                        MessageBox.error(this._oBundle.getText("msgODataError"));
+                    }.bind(this)
+                });
+            } else {
+                oDataModel.create("/TranlsatedTextsSet", oPayload, {
+                    success: function () {
+                        MessageToast.show(this._oBundle.getText("msgSaveSuccess"));
+                        this._loadHistoryPage();
+                    }.bind(this),
+                    error: function (oError) {
+                        MessageBox.error(this._oBundle.getText("msgODataError"));
+                    }.bind(this)
+                });
+            }
+        },
+
+        onOpenFilterDialog: function () {
+            var oView = this.getView();
+            if (!this._oFilterDialog) {
+                Fragment.load({
+                    id: oView.getId(),
+                    name: "datanub.translator.view.FilterDialog",
+                    controller: this
+                }).then(function (oDialog) {
+                    this._oFilterDialog = oDialog;
+                    oView.addDependent(this._oFilterDialog);
+                    this._oFilterDialog.open();
+                }.bind(this));
+            } else {
+                this._oFilterDialog.open();
+            }
+        },
+
+        onApplyFilterDialog: function () {
+            var oView = this.getView();
+            var sGuiNo = oView.byId("dlgFilterGuiNo").getValue().trim();
+            var sSrcLang = oView.byId("dlgFilterSrcLang").getValue().trim();
+            var sTarLang = oView.byId("dlgFilterTarLang").getValue().trim();
+            var sCreatedBy = oView.byId("dlgFilterCreatedBy").getValue().trim();
+            
+            var oDateOn = oView.byId("dlgFilterTransOn").getDateValue();
+            var oDateAt = oView.byId("dlgFilterTransAt").getDateValue();
+
+            var aRawFilters = [];
+            if (sGuiNo) aRawFilters.push(new Filter("GuiNo", FilterOperator.EQ, sGuiNo));
+            if (sSrcLang) aRawFilters.push(new Filter("SrcLang", FilterOperator.EQ, sSrcLang.toUpperCase()));
+            if (sTarLang) aRawFilters.push(new Filter("TarLang", FilterOperator.EQ, sTarLang.toUpperCase()));
+            if (sCreatedBy) aRawFilters.push(new Filter("TransBy", FilterOperator.EQ, sCreatedBy.toUpperCase()));
+            
+            if (oDateOn) {
+                // To prevent local timezone shifting when UI5 formats it for OData (which uses UTC internally),
+                // we construct a strict UTC Date exactly at midnight for the selected local date.
+                var oUtcDate = new Date(Date.UTC(oDateOn.getFullYear(), oDateOn.getMonth(), oDateOn.getDate()));
+                aRawFilters.push(new Filter("TransOn", FilterOperator.EQ, oUtcDate));
+            }
+            if (oDateAt) {
+                // For Edm.Time, we can construct the object format expected by the model formatter
+                var iMs = (oDateAt.getHours() * 3600 + oDateAt.getMinutes() * 60 + oDateAt.getSeconds()) * 1000;
+                var oEdmTime = { ms: iMs, __edmType: "Edm.Time" };
+                aRawFilters.push(new Filter("TransAt", FilterOperator.EQ, oEdmTime));
+            }
+
+            this._aCurrentFilters = [];
+            if (aRawFilters.length > 1) {
+                this._aCurrentFilters.push(new Filter({ filters: aRawFilters, and: true }));
+            } else if (aRawFilters.length === 1) {
+                this._aCurrentFilters.push(aRawFilters[0]);
+            }
+
+            this._iCurrentPage = 0;
+            this._loadHistoryPage();
+            this._oFilterDialog.close();
+        },
+
+        onClearFilterDialog: function () {
+            var oView = this.getView();
+            oView.byId("dlgFilterGuiNo").setValue("");
+            oView.byId("dlgFilterSrcLang").setValue("");
+            oView.byId("dlgFilterTarLang").setValue("");
+            oView.byId("dlgFilterCreatedBy").setValue("");
+            oView.byId("dlgFilterTransOn").setValue("");
+            oView.byId("dlgFilterTransAt").setValue("");
+            
+            this._aCurrentFilters = [];
+            this._iCurrentPage = 0;
+            this._loadHistoryPage();
+            this._oFilterDialog.close();
+        },
+
+        onCancelFilterDialog: function () {
+            this._oFilterDialog.close();
+        },
+
+        onRefreshHistory: function () {
+            this._loadHistoryPage();
+        },
+
+        onDeleteHistory: function (oEvent) {
+            var oData = oEvent.getSource().getBindingContext().getObject();
+            var sPath = "/TranlsatedTextsSet(guid'" + oData.GuiNo + "')";
+            var oDataModel = this.getOwnerComponent().getModel("odata");
+
+            MessageBox.confirm(this._oBundle.getText("msgDeleteConfirm"), {
+                onClose: function (sAction) {
+                    if (sAction === MessageBox.Action.OK) {
+                        oDataModel.remove(sPath, {
+                            success: function () {
+                                MessageToast.show(this._oBundle.getText("msgDeleteSuccess"));
+                                this._loadHistoryPage();
+                            }.bind(this),
+                            error: function () {
+                                MessageBox.error(this._oBundle.getText("msgODataError"));
+                            }.bind(this)
+                        });
+                    }
+                }.bind(this)
+            });
+        },
+
+        onEditHistory: function (oEvent) {
+            var oData = oEvent.getSource().getBindingContext().getObject();
+            
+            // Set the main UI model values to the selected record
+            this._oModel.setProperty("/inputText", oData.SrcText);
+            this._oModel.setProperty("/targetLanguage", (oData.TarLang || "").toLowerCase());
+            this._oModel.setProperty("/translatedText", oData.TarText);
+            this._oModel.setProperty("/detectedSourceLanguageCode", (oData.SrcLang || "").toLowerCase());
+            
+            // Store the GuiNo so onSaveToSAP knows to update instead of create
+            this._sEditGuiNo = oData.GuiNo;
+
+            // Scroll to the top of the page so the user sees the input box
+            var oPage = this.getView().byId("page");
+            if (oPage) { oPage.scrollTo(0); }
+            
+            MessageToast.show("Loaded translation for editing. Make your changes and click Translate.");
+        },
+
+        onNextPage: function() {
+            this._iCurrentPage++;
+            this._loadHistoryPage();
+        },
+
+        onPrevPage: function() {
+            if (this._iCurrentPage > 0) {
+                this._iCurrentPage--;
+                this._loadHistoryPage();
+            }
+        },
+
+        _loadHistoryPage: function () {
+            var oDataModel = this.getOwnerComponent().getModel("odata");
+            var iPageSize = 5;
+            var iSkip = this._iCurrentPage * iPageSize;
+
+            var oTable = this.getView().byId("historyTable");
+            oTable.setBusy(true);
+
+            oDataModel.read("/TranlsatedTextsSet", {
+                urlParameters: {
+                    "$skip": iSkip.toString(),
+                    "$top": iPageSize.toString()
+                },
+                filters: this._aCurrentFilters,
+                success: function (oData) {
+                    oTable.setBusy(false);
+                    var aResults = oData.results || [];
+                    this._oModel.setProperty("/historyData", aResults);
+                    
+                    this._oModel.setProperty("/historyPrevEnabled", this._iCurrentPage > 0);
+                    this._oModel.setProperty("/historyNextEnabled", aResults.length === iPageSize);
+                    this._oModel.setProperty("/historyPage", this._iCurrentPage);
+                }.bind(this),
+                error: function () {
+                    oTable.setBusy(false);
+                    MessageBox.error("Failed to load history.");
+                }.bind(this)
+            });
         },
 
         /* ──────────────────────────────────────────────
@@ -263,8 +524,8 @@ sap.ui.define([
             var sMsg;
             try {
                 var oErr = await oResponse.json();
-                var iCode    = (oErr.error && oErr.error.code) || oResponse.status;
-                var sDetail  = (oErr.error && oErr.error.message) || "";
+                var iCode = (oErr.error && oErr.error.code) || oResponse.status;
+                var sDetail = (oErr.error && oErr.error.message) || "";
 
                 switch (iCode) {
                     case 400:

@@ -144,9 +144,101 @@
                                 width="100%"
                                 growing="true"
                                 growingMaxLines="16" />
+
+                            <!-- Save to SAP Button -->
+                            <Button
+                                id="btnSaveToSAP"
+                                text="{i18n>btnSaveToSAP}"
+                                type="Accept"
+                                icon="sap-icon://save"
+                                press=".onSaveToSAP"
+                                class="sapUiSmallMarginTop" />
                         </VBox>
                     </Panel>
                 </l:Grid>
+
+                <!-- ─────────────  HISTORY PANEL  ───────────── -->
+                <Panel
+                    id="historyPanel"
+                    headerText="{i18n>panelHistory}"
+                    expandable="true"
+                    expanded="true"
+                    width="100%"
+                    class="sapUiLargeMarginTop sapUiResponsiveMargin">
+                    
+                    <Table
+                        id="historyTable"
+                        items="{/historyData}"
+                        mode="None">
+                        
+                        <headerToolbar>
+                            <OverflowToolbar>
+                                <Title text="{i18n>historyTitle}" />
+                                <ToolbarSpacer />
+                                <Button icon="sap-icon://filter" press=".onOpenFilterDialog" tooltip="Filter" type="Transparent" />
+                                <Button icon="sap-icon://refresh" press=".onRefreshHistory" tooltip="Refresh" type="Transparent" />
+                            </OverflowToolbar>
+                        </headerToolbar>
+                        
+                        <columns>
+                            <Column width="10%"><Text text="ID (GuiNo)" /></Column>
+                            <Column width="14%"><Text text="{i18n>colSourceText}" /></Column>
+                            <Column width="14%"><Text text="{i18n>colTargetText}" /></Column>
+                            <Column width="8%" hAlign="Center"><Text text="{i18n>colSourceLang}" /></Column>
+                            <Column width="8%" hAlign="Center"><Text text="{i18n>colTargetLang}" /></Column>
+                            <Column width="10%" hAlign="Center"><Text text="{i18n>colCreatedBy}" /></Column>
+                            <Column width="12%" hAlign="Center"><Text text="Created On" /></Column>
+                            <Column width="10%" hAlign="Center"><Text text="Time" /></Column>
+                            <Column width="16%" hAlign="End"><Text text="{i18n>colActions}" /></Column>
+                        </columns>
+                        
+                        <items>
+                            <ColumnListItem>
+                                <cells>
+                                    <Text text="{GuiNo}" wrapping="true" />
+                                    <Text text="{SrcText}" wrapping="true" />
+                                    <Text text="{TarText}" wrapping="true" />
+                                    <Text text="{SrcLang}" />
+                                    <Text text="{TarLang}" />
+                                    <Text text="{TransBy}" />
+                                    <Text text="{
+                                        path: 'TransOn',
+                                        type: 'sap.ui.model.type.Date',
+                                        formatOptions: { style: 'medium' }
+                                    }" />
+                                    <Text text="{
+                                        path: 'TransAt',
+                                        formatter: '.formatter.formatTime'
+                                    }" />
+                                    <HBox justifyContent="End">
+                                        <Button icon="sap-icon://edit" type="Transparent" press=".onEditHistory" />
+                                        <Button icon="sap-icon://delete" type="Transparent" press=".onDeleteHistory" />
+                                    </HBox>
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
+
+                    <!-- Pagination Toolbar -->
+                    <OverflowToolbar id="paginationToolbar" class="sapUiSmallMarginTop">
+                        <ToolbarSpacer />
+                        <Button
+                            id="btnPrevPage"
+                            icon="sap-icon://navigation-left-arrow"
+                            text="Previous"
+                            press=".onPrevPage"
+                            enabled="{/historyPrevEnabled}" />
+                        <Text text="Page {= ${/historyPage} + 1 }" class="sapUiSmallMarginBeginEnd" />
+                        <Button
+                            id="btnNextPage"
+                            icon="sap-icon://navigation-right-arrow"
+                            iconFirst="false"
+                            text="Next"
+                            press=".onNextPage"
+                            enabled="{/historyNextEnabled}" />
+                        <ToolbarSpacer />
+                    </OverflowToolbar>
+                </Panel>
 
                 <!-- Busy indicator overlay during translation -->
                 <dependents>
