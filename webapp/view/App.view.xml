@@ -168,13 +168,24 @@
                     
                     <Table
                         id="historyTable"
-                        items="{/historyData}"
+                        items="{/allHistoryData}"
+                        growing="true"
+                        growingThreshold="5"
                         mode="None">
                         
                         <headerToolbar>
                             <OverflowToolbar>
                                 <Title text="{i18n>historyTitle}" />
                                 <ToolbarSpacer />
+                                <SearchField id="searchField" liveChange=".onSearch" width="auto" placeholder="Search..." />
+                                <MenuButton icon="sap-icon://excel-attachment" tooltip="Export">
+                                    <menu>
+                                        <Menu>
+                                            <MenuItem text="Export Translation History" icon="sap-icon://excel-attachment" press=".onExport" />
+                                        </Menu>
+                                    </menu>
+                                </MenuButton>
+                                <Button icon="sap-icon://sort" press=".onOpenSortDialog" tooltip="Sort" type="Transparent" />
                                 <Button icon="sap-icon://filter" press=".onOpenFilterDialog" tooltip="Filter" type="Transparent" />
                                 <Button icon="sap-icon://refresh" press=".onRefreshHistory" tooltip="Refresh" type="Transparent" />
                             </OverflowToolbar>
@@ -219,25 +230,6 @@
                         </items>
                     </Table>
 
-                    <!-- Pagination Toolbar -->
-                    <OverflowToolbar id="paginationToolbar" class="sapUiSmallMarginTop">
-                        <ToolbarSpacer />
-                        <Button
-                            id="btnPrevPage"
-                            icon="sap-icon://navigation-left-arrow"
-                            text="Previous"
-                            press=".onPrevPage"
-                            enabled="{/historyPrevEnabled}" />
-                        <Text text="Page {= ${/historyPage} + 1 }" class="sapUiSmallMarginBeginEnd" />
-                        <Button
-                            id="btnNextPage"
-                            icon="sap-icon://navigation-right-arrow"
-                            iconFirst="false"
-                            text="Next"
-                            press=".onNextPage"
-                            enabled="{/historyNextEnabled}" />
-                        <ToolbarSpacer />
-                    </OverflowToolbar>
                 </Panel>
 
                 <!-- Busy indicator overlay during translation -->

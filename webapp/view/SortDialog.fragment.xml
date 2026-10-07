@@ -1,0 +1,11 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+    <ViewSettingsDialog confirm=".onConfirmSortDialog" sortDescending="true">
+        <sortItems>
+            <ViewSettingsItem text="Creation Date" key="TransOn" selected="true" />
+            <ViewSettingsItem text="Creation Time" key="TransAt" />
+            <ViewSettingsItem text="Created By" key="TransBy" />
+            <ViewSettingsItem text="Source Language" key="SrcLang" />
+            <ViewSettingsItem text="Target Language" key="TarLang" />
+        </sortItems>
+    </ViewSettingsDialog>
+</core:FragmentDefinition>

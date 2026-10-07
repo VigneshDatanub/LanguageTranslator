@@ -5,8 +5,9 @@ sap.ui.define([
     "sap/ui/model/Filter",
     "sap/ui/model/FilterOperator",
     "sap/ui/core/Fragment",
+    "sap/ui/model/Sorter",
     "datanub/translator/model/formatter"
-], function (Controller, MessageBox, MessageToast, Filter, FilterOperator, Fragment, formatter) {
+], function (Controller, MessageBox, MessageToast, Filter, FilterOperator, Fragment, Sorter, formatter) {
     "use strict";
 
     // ================================================================
@@ -45,11 +46,11 @@ sap.ui.define([
             // Load any saved translation state from local storage
             this._loadState();
 
-            this._iCurrentPage = 0;
             this._aCurrentFilters = [];
-            this._oModel.setProperty("/historyPage", 0);
-            this._oModel.setProperty("/historyPrevEnabled", false);
-            this._oModel.setProperty("/historyNextEnabled", false);
+            this._aSorters = [
+                new Sorter("TransOn", true),
+                new Sorter("TransAt", true)
+            ];
 
             // Hook into the browser's unload event to automatically save state upon refresh/close
             window.addEventListener("beforeunload", this._saveState.bind(this));
@@ -363,8 +364,11 @@ sap.ui.define([
                 this._aCurrentFilters.push(aRawFilters[0]);
             }
 
-            this._iCurrentPage = 0;
-            this._loadHistoryPage();
+            var oTable = this.getView().byId("historyTable");
+            var oBinding = oTable.getBinding("items");
+            if (oBinding) {
+                oBinding.filter(this._aCurrentFilters);
+            }
             this._oFilterDialog.close();
         },
 
@@ -378,13 +382,133 @@ sap.ui.define([
             oView.byId("dlgFilterTransAt").setValue("");
             
             this._aCurrentFilters = [];
-            this._iCurrentPage = 0;
-            this._loadHistoryPage();
+            var oTable = this.getView().byId("historyTable");
+            var oBinding = oTable.getBinding("items");
+            if (oBinding) {
+                oBinding.filter(this._aCurrentFilters);
+            }
             this._oFilterDialog.close();
         },
 
         onCancelFilterDialog: function () {
             this._oFilterDialog.close();
+        },
+
+        onSearch: function (oEvent) {
+            var sQuery = oEvent.getParameter("newValue");
+            var aSearchFilters = [];
+            
+            if (sQuery && sQuery.length > 0) {
+                aSearchFilters = [
+                    new Filter({
+                        filters: [
+                            new Filter("SrcText", FilterOperator.Contains, sQuery),
+                            new Filter("TarText", FilterOperator.Contains, sQuery),
+                            new Filter("TransBy", FilterOperator.Contains, sQuery),
+                            new Filter("SrcLang", FilterOperator.Contains, sQuery),
+                            new Filter("TarLang", FilterOperator.Contains, sQuery)
+                        ],
+                        and: false
+                    })
+                ];
+            }
+
+            // Combine with existing dialog filters
+            var aFinalFilters = this._aCurrentFilters.slice(); 
+            if (aSearchFilters.length > 0) {
+                aFinalFilters.push(aSearchFilters[0]);
+            }
+
+            var oTable = this.getView().byId("historyTable");
+            var oBinding = oTable.getBinding("items");
+            if (oBinding) {
+                oBinding.filter(aFinalFilters);
+            }
+        },
+
+        onExport: function () {
+            var oTable = this.getView().byId("historyTable");
+            var oBinding = oTable.getBinding("items");
+            if (!oBinding) {
+                return;
+            }
+
+            var aContexts = oBinding.getContexts(0, oBinding.getLength());
+            var aData = aContexts.map(function (oContext) {
+                return oContext.getObject();
+            });
+
+            if (aData.length === 0) {
+                MessageBox.warning("No data to export.");
+                return;
+            }
+
+            var sCsv = "\uFEFFID (GuiNo),Source Text,Target Text,Source Lang,Target Lang,Created By,Date,Time\n";
+            aData.forEach(function (oRow) {
+                var sDate = oRow.TransOn ? new Date(oRow.TransOn).toLocaleDateString() : "";
+                var sTime = oRow.TransAt && oRow.TransAt.ms !== undefined ? 
+                            new Date(oRow.TransAt.ms).toISOString().substr(11,8) : "";
+                
+                var escapeCsv = function(s) {
+                    if (s === null || s === undefined) return '""';
+                    return '"' + String(s).replace(/"/g, '""') + '"';
+                };
+
+                sCsv += escapeCsv(oRow.GuiNo) + "," +
+                        escapeCsv(oRow.SrcText) + "," +
+                        escapeCsv(oRow.TarText) + "," +
+                        escapeCsv(oRow.SrcLang) + "," +
+                        escapeCsv(oRow.TarLang) + "," +
+                        escapeCsv(oRow.TransBy) + "," +
+                        escapeCsv(sDate) + "," +
+                        escapeCsv(sTime) + "\n";
+            });
+
+            sap.ui.require(["sap/ui/core/util/File"], function (File) {
+                File.save(sCsv, "TranslationHistory", "csv", "text/csv");
+            });
+        },
+
+        onOpenSortDialog: function () {
+            var oView = this.getView();
+            if (!this._oSortDialog) {
+                Fragment.load({
+                    id: oView.getId(),
+                    name: "datanub.translator.view.SortDialog",
+                    controller: this
+                }).then(function (oDialog) {
+                    this._oSortDialog = oDialog;
+                    oView.addDependent(this._oSortDialog);
+                    this._oSortDialog.open();
+                }.bind(this));
+            } else {
+                this._oSortDialog.open();
+            }
+        },
+
+        onConfirmSortDialog: function (oEvent) {
+            var mParams = oEvent.getParameters();
+            var oSortItem = mParams.sortItem;
+            var bDescending = mParams.sortDescending;
+
+            if (oSortItem) {
+                var sPath = oSortItem.getKey();
+                this._aSorters = [new Sorter(sPath, bDescending)];
+                if (sPath === "TransOn") {
+                    this._aSorters.push(new Sorter("TransAt", bDescending));
+                }
+            } else {
+                this._aSorters = [
+                    new Sorter("TransOn", true),
+                    new Sorter("TransAt", true)
+                ];
+            }
+
+            var oTable = this.getView().byId("historyTable");
+            var oBinding = oTable.getBinding("items");
+            if (oBinding) {
+                oBinding.sort(this._aSorters);
+            }
         },
 
         onRefreshHistory: function () {
@@ -432,40 +556,24 @@ sap.ui.define([
             MessageToast.show("Loaded translation for editing. Make your changes and click Translate.");
         },
 
-        onNextPage: function() {
-            this._iCurrentPage++;
-            this._loadHistoryPage();
-        },
-
-        onPrevPage: function() {
-            if (this._iCurrentPage > 0) {
-                this._iCurrentPage--;
-                this._loadHistoryPage();
-            }
-        },
-
         _loadHistoryPage: function () {
             var oDataModel = this.getOwnerComponent().getModel("odata");
-            var iPageSize = 5;
-            var iSkip = this._iCurrentPage * iPageSize;
-
             var oTable = this.getView().byId("historyTable");
             oTable.setBusy(true);
 
             oDataModel.read("/TranlsatedTextsSet", {
-                urlParameters: {
-                    "$skip": iSkip.toString(),
-                    "$top": iPageSize.toString()
-                },
-                filters: this._aCurrentFilters,
+                urlParameters: { "$top": "5000" },
                 success: function (oData) {
                     oTable.setBusy(false);
                     var aResults = oData.results || [];
-                    this._oModel.setProperty("/historyData", aResults);
+                    this._oModel.setProperty("/allHistoryData", aResults);
                     
-                    this._oModel.setProperty("/historyPrevEnabled", this._iCurrentPage > 0);
-                    this._oModel.setProperty("/historyNextEnabled", aResults.length === iPageSize);
-                    this._oModel.setProperty("/historyPage", this._iCurrentPage);
+                    // Apply current filters and sorters locally on the ListBinding
+                    var oBinding = oTable.getBinding("items");
+                    if (oBinding) {
+                        oBinding.filter(this._aCurrentFilters);
+                        oBinding.sort(this._aSorters);
+                    }
                 }.bind(this),
                 error: function () {
                     oTable.setBusy(false);
